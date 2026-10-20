@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  groot-share:
+    build: .
+    container_name: groot-share
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-80}:8080"
+    environment:
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8080"
+      CONFIG_PATH: "/config/storages.json"
+      MAX_UPLOAD_SIZE_MB: "2048"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin}"
+      SESSION_SECRET: "${SESSION_SECRET:-change-me-in-production}"
+      PERMITTED_ROOTS: "/storage"
+    volumes:
+      - ./config:/config
+      # Example local storage mounts - adjust to your server paths
+      # - /srv/groot/files:/storage/files:rw
+      # SMB/NFS mounts must be done on the host and bind-mounted here
+      - /tmp/groot_test_storage:/storage:rw
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-s", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    user: "1000:1000"

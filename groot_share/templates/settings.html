@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings - {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/css/main.css" />
+  <style>
+    .settings {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+    }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid #d1d5db;
+      padding: 0.4rem 0.75rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+    }
+    .btn-ghost:hover { background: #f3f4f6; }
+    .btn-danger {
+      background: #dc2626;
+      color: white;
+      border: none;
+      padding: 0.4rem 0.75rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+    }
+    .btn-danger:hover { background: #b91c1c; }
+    .card {
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 1rem;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-body { padding: 1rem; }
+    .storage-card {
+      border-left: 4px solid #9ca3af;
+      margin-bottom: 0.75rem;
+    }
+    .storage-card.local { border-left-color: #3b82f6; }
+    .storage-card.smb { border-left-color: #10b981; }
+    .storage-card.nfs { border-left-color: #f59e0b; }
+    .storage-card.enabled { opacity: 1; }
+    .storage-card.disabled { opacity: 0.6; }
+    .status {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .status.ok { background: #d1fae5; color: #065f46; }
+    .status.unavailable { background: #fee2e2; color: #991b1b; }
+    .status.error { background: #fef3c7; color: #92400e; }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label {
+      display: block;
+      margin-bottom: 0.25rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+    .toggle input { margin: 0; }
+    .actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .hidden { display: none; }
+    .toast {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      background: #10b981;
+      color: white;
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .toast.error { background: #ef4444; }
+    .dialog {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .dialog-box {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+  </style>
+  <script>
+    // Small utility functions
+    function $$(sel) { return document.querySelector(sel); }
+    function $$All(sel) { return document.querySelectorAll(sel); }
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        ...options,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || response.statusText);
+      }
+      return response.json();
+    }
+    function showToast(msg, error = false) {
+      const toast = $$(".toast");
+      toast.textContent = msg;
+      toast.className = "toast" + (error ? " error" : "");
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
+    async function loadStorages() {
+      try {
+        const data = await api("/api/storages");
+        renderStorages(data);
+      } catch (e) {
+        showToast("Failed to load storages: " + e, true);
+      }
+    }
+    function renderStorages(storages) {
+      const container = $$(".storage-list");
+      container.innerHTML = "";
+      for (const [sid, cfg] of Object.entries(storages)) {
+        const el = document.createElement("div");
+        el.className = `storage-card ${cfg.enabled ? "enabled" : "disabled"} ${cfg.storage_type}`;
+        const status = cfg.last_test === "ok" ? "Connected" : cfg.last_test === "unavailable" ? "Unavailable" : cfg.last_test === "read_only" ? "Read-only" : "Unknown";
+        const statusClass = status === "Connected" ? "ok" : status === "Unavailable" ? "unavailable" : "error";
+        el.innerHTML = `
+          <div class="card-header">
+            <h3>${cfg.display_name}</h3>
+            <span class="status ${statusClass}">${status}</span>
+          </div>
+          <div class="card-body">
+            <p><strong>Type:</strong> ${cfg.storage_type}</p>
+            <p><strong>Path:</strong> ${cfg.path}</p>
+            <p><strong>Read-only:</strong> ${cfg.read_only ? "Yes" : "No"}</p>
+            <div class="toggle">
+              <input type="checkbox" id="enabled-${sid}" ${cfg.enabled ? "checked" : ""} />
+              <label for="enabled-${sid}">Enabled</label>
+            </div>
+            <div class="actions">
+              <button class="btn-ghost" onclick="testStorage('${sid}')">Test</button>
+              <button class="btn-ghost" onclick="editStorage('${sid}')">Edit</button>
+              <button class="btn-danger" onclick="deleteStorage('${sid}')">Delete</button>
+            </div>
+          </div>
+        `;
+        container.appendChild(el);
+        // Wire up the toggle
+        const checkbox = el.querySelector(`#enabled-${sid}`);
+        checkbox.addEventListener("change", () => toggleStorage(sid, checkbox.checked));
+      }
+    }
+    let editingId = null;
+    function editStorage(id) {
+      // For simplicity, just toggles edit mode; real impl would open a form.
+      showToast("Edit storage: " + id, false);
+    }
+    function deleteStorage(id) {
+      if (confirm("Delete this storage? This will NOT delete underlying files.")) {
+        fetch(`/api/storages/${id}`, { method: "DELETE" })
+          .then(() => {
+            showToast("Storage deleted.");
+            loadStorages();
+          })
+          .catch(e => showToast("Delete failed: " + e, true));
+      }
+    }
+    function toggleStorage(id, enabled) {
+      fetch(`/api/storages/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `enabled=${enabled}`,
+      })
+        .then(() => loadStorages())
+        .catch(e => showToast("Update failed: " + e, true));
+    }
+    function testStorage(id) {
+      fetch(`/api/storages/${id}/test`, { method: "POST" })
+        .then(r => r.json())
+        .then(d => {
+          const status = d.status;
+          const msg = `Status: ${status}`;
+          showToast(msg, status !== "ok");
+        })
+        .catch(e => showToast("Test failed: " + e, true));
+    }
+    function openAddModal() {
+      $$(".add-modal").classList.remove("hidden");
+    }
+    function closeAddModal() {
+      $$(".add-modal").classList.add("hidden");
+    }
+    function toggleTypeSpecifics(type) {
+      $$(".smb-fields").classList.add("hidden");
+      $$(".nfs-fields").classList.add("hidden");
+      if (type === "smb") $$(".smb-fields").classList.remove("hidden");
+      if (type === "nfs") $$(".nfs-fields").classList.remove("hidden");
+    }
+    document.addEventListener("DOMContentLoaded", () => {
+      loadStorages();
+      $$(".btn-primary").onclick = openAddModal;
+      $$(".close-modal").onclick = closeAddModal;
+      $$(".cancel-btn").onclick = closeAddModal;
+      // Add storage form
+      $$("#add-storage-form").addEventListener("submit", async e => {
+        e.preventDefault();
+        const form = e.target;
+        const data = {
+          display_name: form.display_name.value,
+          storage_type: form.storage_type.value,
+          path: form.path.value,
+          read_only: form.read_only.checked,
+          enabled: form.enabled.checked,
+        };
+        if (form.storage_type.value === "smb") {
+          data.smb_server = form.smb_server.value;
+          data.smb_share = form.smb_share.value;
+          data.smb_subdir = form.smb_subdir.value;
+          data.smb_username = form.smb_username.value;
+          data.smb_password = form.smb_password.value;
+          data.smb_domain = form.smb_domain.value;
+        } else if (form.storage_type.value === "nfs") {
+          data.nfs_server = form.nfs_server.value;
+          data.nfs_export = form.nfs_export.value;
+          data.nfs_version = form.nfs_version.value;
+        }
+        try {
+          await api("/api/storages", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams(data).toString(),
+          });
+          closeAddModal();
+          loadStorages();
+          showToast("Storage added.");
+        } catch (e) {
+          showToast("Add failed: " + e, true);
+        }
+      });
+    });
+  </script>
+</head>
+<body class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🌿</span>
+      <h1>{{ app_name }}</h1>
+    </div>
+    <div class="actions">
+      <a href="/" class="icon-btn" title="Back">←</a>
+    </div>
+  </header>
+
+  <main class="settings">
+    <div class="settings-header">
+      <h2>Storage Configuration</h2>
+      <button class="btn-primary" id="add-storage-btn">Add Storage</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Configured Storages</h3>
+        <p class="subtitle">Manage your local, SMB, and NFS storage locations.</p>
+      </div>
+      <div class="card-body">
+        <div class="storage-list">
+          <div class="empty-state">No storages configured.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card add-modal hidden">
+      <div class="card-header">
+        <h3>Add Storage</h3>
+        <button class="btn-ghost close-modal">✕</button>
+      </div>
+      <div class="card-body">
+        <form id="add-storage-form">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="display_name">Display Name</label>
+              <input type="text" id="display_name" name="display_name" required />
+            </div>
+            <div class="form-group">
+              <label for="storage_type">Storage Type</label>
+              <select id="storage_type" name="storage_type" onchange="toggleTypeSpecifics(this.value)">
+                <option value="local">Local Directory</option>
+                <option value="smb">SMB/CIFS Share</option>
+                <option value="nfs">NFS Share</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="path">Path / Host</label>
+              <input type="text" id="path" name="path" placeholder="/storage/files" required />
+            </div>
+            <div class="form-group">
+              <label class="toggle">
+                <input type="checkbox" id="read_only" name="read_only" /> <span>Read-only</span>
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="toggle">
+                <input type="checkbox" id="enabled" name="enabled" checked /> <span>Enabled</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="smb-fields hidden">
+            <h4>SMB Configuration</h4>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="smb_server">Server (IP or hostname)</label>
+                <input type="text" id="smb_server" name="smb_server" />
+              </div>
+              <div class="form-group">
+                <label for="smb_share">Share Name</label>
+                <input type="text" id="smb_share" name="smb_share" />
+              </div>
+              <div class="form-group">
+                <label for="smb_subdir">Subdirectory (optional)</label>
+                <input type="text" id="smb_subdir" name="smb_subdir" />
+              </div>
+              <div class="form-group">
+                <label for="smb_username">Username</label>
+                <input type="text" id="smb_username" name="smb_username" />
+              </div>
+              <div class="form-group">
+                <label for="smb_password">Password</label>
+                <input type="password" id="smb_password" name="smb_password" />
+              </div>
+              <div class="form-group">
+                <label for="smb_domain">Domain/Workgroup (optional)</label>
+                <input type="text" id="smb_domain" name="smb_domain" />
+              </div>
+            </div>
+          </div>
+
+          <div id="nfs-fields" class="hidden">
+            <h4>NFS Configuration</h4>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="nfs_server">Server (IP or hostname)</label>
+                <input type="text" id="nfs_server" name="nfs_server" />
+              </div>
+              <div class="form-group">
+                <label for="nfs_export">Export Path</label>
+                <input type="text" id="nfs_export" name="nfs_export" />
+              </div>
+              <div class="form-group">
+                <label for="nfs_version">Version (optional)</label>
+                <input type="text" id="nfs_version" name="nfs_version" placeholder="e.g., 3" />
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 1rem;">
+            <button type="submit" class="btn-primary">Add Storage</button>
+            <button type="button" class="btn-ghost cancel-btn" style="margin-left: 0.5rem;">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast hidden"></div>
+</body>
+</html>

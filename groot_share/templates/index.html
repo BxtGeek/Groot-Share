@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="/static/css/main.css" />
+</head>
+<body class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🌿</span>
+      <h1>{{ app_name }}</h1>
+    </div>
+    <div class="storage-switch">
+      <label for="storage-select">Storage:</label>
+      <select id="storage-select" onchange="switchStorage(this.value)">
+        <option value="">— Select —</option>
+        {% for s in storages %}
+          <option value="{{ s.storage_id }}" data-type="{{ s.storage_type }}" data-readonly="{{ s.is_readonly|tojson }}">{{ s.display_name }} ({{ s.storage_type }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button id="refresh" title="Refresh" class="icon-btn">↻</button>
+      <a href="/settings" class="icon-btn" title="Settings">⚙</a>
+      <a href="/logout" class="icon-btn" title="Sign out">↗</a>
+    </div>
+  </header>
+
+  <main id="content">
+    <div id="empty-state" class="empty-state hidden">
+      <p>Select a storage location to begin browsing.</p>
+    </div>
+
+    <div id="file-view" class="file-view hidden">
+      <div id="upload-zone" class="upload-zone">
+        <div class="upload-icon">⬆</div>
+        <p class="upload-text">Drop files here to upload</p>
+        <p class="upload-sub">or click to browse files</p>
+        <input type="file" id="file-input" multiple class="hidden" />
+        <button id="browse-btn" type="button">Choose Files</button>
+        <p id="dest-info" class="dest-info"></p>
+      </div>
+
+      <nav class="breadcrumbs" id="breadcrumbs">
+        <span id="crumb-root">/</span>
+      </nav>
+
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="Filter files..." class="search" />
+        <select id="sort-select" class="sort-select">
+          <option value="name">Sort: Name</option>
+          <option value="size">Sort: Size</option>
+          <option value="modified">Sort: Modified</option>
+          <option value="type">Sort: Type</option>
+        </select>
+        <label class="sort-order">
+          <input type="checkbox" id="sort-desc" /> Descending
+        </label>
+        <button id="mkdir-btn" type="button" class="btn-ghost">+ New Folder</button>
+      </div>
+
+      <table class="file-table" id="file-table">
+        <thead>
+          <tr>
+            <th data-sort="name">Name</th>
+            <th data-sort="type">Type</th>
+            <th data-sort="size">Size</th>
+            <th data-sort="modified">Last modified</th>
+            <th class="actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="file-body"></tbody>
+      </table>
+
+      <div id="empty-dir" class="empty-dir hidden">
+        <p>This folder is empty</p>
+      </div>
+
+      <div id="loading" class="loading hidden"><span class="spinner"></span></div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="confirm-dialog" class="dialog hidden">
+    <div class="dialog-box">
+      <h3 id="confirm-title">Confirm</h3>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <button id="confirm-cancel" class="btn-ghost">Cancel</button>
+        <button id="confirm-ok" class="btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rename-dialog" class="dialog hidden">
+    <div class="dialog-box">
+      <h3>Rename</h3>
+      <input type="text" id="rename-input" class="rename-input" />
+      <div class="dialog-actions">
+        <button id="rename-cancel" class="btn-ghost">Cancel</button>
+        <button id="rename-ok" class="btn-primary">Rename</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mkdir-dialog" class="dialog hidden">
+    <div class="dialog-box">
+      <h3>New Folder</h3>
+      <input type="text" id="mkdir-input" placeholder="Folder name" class="rename-input" />
+      <div class="dialog-actions">
+        <button id="mkdir-cancel" class="btn-ghost">Cancel</button>
+        <button id="mkdir-ok" class="btn-primary">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
